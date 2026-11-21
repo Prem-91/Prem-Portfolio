@@ -1,3 +1,4 @@
+import { prepareImageForUpload } from "@/lib/compress-image";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
@@ -439,8 +440,8 @@ function ResumeUpload({ aboutId, onDone }: { aboutId: string; onDone: () => void
     async (files: File[]) => {
       const file = files[0];
       if (!file) return;
-      if (file.size > 8 * 1024 * 1024) {
-        toast.error("File too large (max 8MB).");
+      if (file.size > 3 * 1024 * 1024) {
+        toast.error("File too large (max 3MB on this host).");
         return;
       }
       setBusy(true);
@@ -1342,16 +1343,14 @@ function MomentForm({ initial, onCancel, onSaved }: { initial: Moment | null; on
     }
     setBusy(true);
     try {
-      let image = {};
+      let image: { image_base64: string; content_type: string; filename: string } | Record<string, never> = {};
       if (file) {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        let bin = "";
-        for (const byte of bytes) bin += String.fromCharCode(byte);
-        image = { image_base64: btoa(bin), content_type: file.type || "image/jpeg", filename: file.name };
+        const prepared = await prepareImageForUpload(file);
+        image = { image_base64: prepared.base64, content_type: prepared.contentType, filename: prepared.filename };
       }
       const metadata = { title: title.trim(), event_date: date || null, caption: caption.trim() || null, category: category.trim() || null, location: location.trim() || null, sort_order: order };
       if (initial) await updateMoment({ data: { ...metadata, id: initial.id, ...image } });
-      else if (file) await createMoment({ data: { ...metadata, image_base64: (image as { image_base64: string }).image_base64, content_type: file.type || "image/jpeg", filename: file.name } });
+      else if (file) await createMoment({ data: { ...metadata, ...(image as { image_base64: string; content_type: string; filename: string }) } });
       toast.success("Saved.");
       onSaved();
     } catch (e: any) {
